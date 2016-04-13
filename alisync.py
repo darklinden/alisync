@@ -100,7 +100,7 @@ def refresh_file(auth_key, auth_sec, cdn_path, remote_path):
 
     print(result)
 
-def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths):
+def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run):
 
     auth = oss2.Auth(auth_key, auth_sec)
     bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
@@ -141,9 +141,12 @@ def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude
                     # print("file: " + key_path + " remote md5: " + remote_md5 + " md5: " + md5_str)
 
                     if remote_md5.lower() != md5_str.lower():
-                        print("uploading: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "\n\t...")
-                        result = bucket.put_object_from_file(key_path, file_path, headers={'Content-MD5': file_md5_base64(file_path)})
-                        print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+                        if dry_run:
+                            print("will upload: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "")
+                        else:
+                            print("uploading: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "\n\t...")
+                            result = bucket.put_object_from_file(key_path, file_path, headers={'Content-MD5': file_md5_base64(file_path)})
+                            print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
                     else:
                         print("file: " + key_path + " matches md5: " + remote_md5 + ", skip.")
 
@@ -155,6 +158,7 @@ def __main__():
         self_install("alisync.py", "/usr/local/bin")
         return
 
+    dry_run = False
     key_bucket = ""
     local_path = ""
     remote_path = ""
@@ -173,30 +177,61 @@ def __main__():
     auth_key = bytearray(auth_key, 'utf-8')
     auth_sec = bytearray(auth_sec, 'utf-8')
 
-    if len(sys.argv) > 4:
-        key_bucket = sys.argv[1]
-        local_path = sys.argv[2]
-        cdn_path = sys.argv[3]
-        remote_path = sys.argv[4]
+    argLen = len(sys.argv)
+
+    idx = 1
+    while idx < argLen:
+        cmd_s = sys.argv[idx]
+        if cmd_s[0] == "-":
+            cmd = cmd_s[1:]
+            v = sys.argv[idx + 1]
+            if cmd == "dry":
+                if v == "1":
+                    dry_run = True
+                else:
+                    dry_run = False
+            elif cmd == "b":
+                key_bucket = v
+            elif cmd == "l":
+                local_path = v
+            elif cmd == "c":
+                cdn_path = v
+            elif cmd == "r":
+                remote_path = v
+            elif cmd == "ex":
+                idx += 1
+                break
+            idx += 2
+        else:
+            idx += 1
+
+    if dry_run:
+        print("dry_run: True")
+    else:
+        print("dry_run: False")
+    print("key_bucket: " + key_bucket)
+    print("local_path: " + local_path)
+    print("cdn_path: " + cdn_path)
+    print("remote_path: " + remote_path)
 
     if len(key_bucket) == 0 or len(local_path) == 0 or len(cdn_path) == 0 or len(remote_path) == 0:
-        print("using alisync [bucket-key] [local-folder-path] [cdn-path] [remote-key-path] -ex [exclude-path1] [exclude-path2] ... to sync")
+        print("using alisync -dry [1 dry-run] -b [bucket-key] -l [local-folder-path] -c [cdn-path] -r [remote-key-path] -ex [exclude-path1] [exclude-path2] ... to sync")
         return
 
-    if len(sys.argv) > 6:
-        if sys.argv[5] == '-ex':
-            idx = 6
-            while idx < len(sys.argv):
-                tmp = sys.argv[idx]
-                tmp = tmp.strip()
-                tmp = tmp.strip("'")
-                tmp = tmp.strip('"')
-                exclude_paths.append(tmp)
-                idx += 1
+    while idx < argLen:
+        tmp = sys.argv[idx]
+        tmp = tmp.strip()
+        tmp = tmp.strip("'")
+        tmp = tmp.strip('"')
+        exclude_paths.append(tmp)
+        idx += 1
 
-    sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths)
+    print("exclude_paths: " + json.dumps(exclude_paths))
 
-    refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
+    sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run)
+
+    if not dry_run:
+        refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
 
     print("Done")
 
