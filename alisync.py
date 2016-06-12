@@ -7,6 +7,7 @@ import subprocess
 import shutil
 import sys
 import json
+import errno
 
 from aliyunsdkcore import client
 from aliyunsdkcdn.request.v20141111 import RefreshObjectCachesRequest
@@ -157,7 +158,6 @@ def oss_folder_content(bucket, remote_path):
     p = remote_path
     if not remote_path.endswith("/"):
         p += "/"
-    oss2.models.SimplifiedObjectInfo
     for obj in oss2.ObjectIterator(bucket,delimiter='/', prefix=p):
         if obj.is_prefix():  # 文件夹
             # print('directory: ' + obj.key)
@@ -214,6 +214,63 @@ def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dr
                 print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
         else:
             print("file: " + remote_key_path + " matches md5: " + local_md5 + ", skip.")
+
+def mkdir_p(path):
+    # print("mkdir_p: " + path)
+    try:
+        os.makedirs(path)
+    except OSError as exc:  # Python >2.5
+        if exc.errno == errno.EEXIST and os.path.isdir(path):
+            pass
+        else:
+            raise
+
+def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run):
+
+    auth = oss2.Auth(auth_key, auth_sec)
+    bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+
+    print("collecting files under: " + remote_path + " ...")
+    remote_files = oss_folder_content(bucket, remote_path)
+
+    for file_obj in remote_files:
+
+        r = remote_path
+        if not r.endswith("/"):
+            r += "/"
+
+        relative_path = file_obj.key[len(r):]
+        if len(relative_path) == 0:
+            continue
+
+        l = local_path
+        if not l.endswith("/"):
+            l += "/"
+
+        local_file_path = l + relative_path
+
+        if os.path.isfile(local_file_path):
+            local_md5 = file_md5(local_file_path)
+        else:
+            local_md5 = ""
+
+        remote_md5 = file_obj.etag
+
+        if len(remote_md5) > 0 and remote_md5.lower() != local_md5.lower():
+            if dry_run:
+                print("will download: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "")
+            else:
+                print("downloading: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "\n\t...")
+                folder, name = os.path.split(local_file_path)
+                mkdir_p(folder)
+                if os.path.isfile(local_file_path):
+                    os.remove(local_file_path)
+                if os.path.isdir(local_file_path):
+                    shutil.rmtree(local_file_path)
+                result = bucket.get_object_to_file(file_obj.key, local_file_path)
+                print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+        else:
+            print("file: " + local_file_path + " matches md5: " + remote_md5 + ", skip.")
 
 def __main__():
 
@@ -309,6 +366,10 @@ def __main__():
     elif action_key == "copy":
         # copy files in buket
         copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
+
+    elif action_key == "down":
+        # download
+        download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
 
     print("Done")
 
