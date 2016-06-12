@@ -100,7 +100,7 @@ def refresh_file(auth_key, auth_sec, cdn_path, remote_path):
 
     print(result)
 
-def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run):
+def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run):
 
     auth = oss2.Auth(auth_key, auth_sec)
     bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
@@ -119,6 +119,8 @@ def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude
                         key_path = os.path.join(root[len(local_path):], fn)
                     else:
                         key_path = fn
+
+                    key_path = key_path.replace("\\", "/")
 
                     if key_path[0] == "/":
                         key_path = remote_path + key_path
@@ -150,6 +152,68 @@ def sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude
                     else:
                         print("file: " + key_path + " matches md5: " + remote_md5 + ", skip.")
 
+def oss_folder_content(bucket, remote_path):
+    ret = []
+    p = remote_path
+    if not remote_path.endswith("/"):
+        p += "/"
+    oss2.models.SimplifiedObjectInfo
+    for obj in oss2.ObjectIterator(bucket,delimiter='/', prefix=p):
+        if obj.is_prefix():  # 文件夹
+            # print('directory: ' + obj.key)
+            ret.extend(oss_folder_content(bucket, obj.key))
+        else:                # 文件
+            # print('file: ' + obj.key)
+            ret.append(obj)
+
+    return ret
+
+
+def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run):
+
+    auth = oss2.Auth(auth_key, auth_sec)
+    bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+
+    print("collecting files under: " + local_path + " ...")
+    remote_files = oss_folder_content(bucket, local_path)
+
+    for file_obj in remote_files:
+
+        l = local_path
+        if not l.endswith("/"):
+            l += "/"
+
+        r = remote_path
+        if not r.endswith("/"):
+            r += "/"
+
+        relative_path = file_obj.key[len(l):]
+
+        remote_key_path = r + relative_path
+
+        try:
+            remote_result = bucket.head_object(remote_key_path)
+            remote_headers = remote_result.headers
+            remote_md5 = remote_headers.get("ETag", "")
+            remote_md5 = str(remote_md5)
+            remote_md5 = remote_md5.strip()
+            remote_md5 = remote_md5.strip("\"")
+        except:
+            remote_md5 = ""
+            pass
+
+        local_md5 = file_obj.etag
+
+        if len(local_md5) > 0 and remote_md5.lower() != local_md5.lower():
+            if dry_run:
+                print("will copy: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "")
+            else:
+                print("copying: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "\n\t...")
+                bucket.delete_object(remote_key_path)
+                result = bucket.copy_object(key_bucket, local_path, remote_key_path)
+                print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+        else:
+            print("file: " + remote_key_path + " matches md5: " + local_md5 + ", skip.")
 
 def __main__():
 
@@ -158,7 +222,10 @@ def __main__():
         self_install("alisync.py", "/usr/local/bin")
         return
 
+    # upload download
+
     dry_run = False
+    action_key = "upload"
     key_bucket = ""
     local_path = ""
     remote_path = ""
@@ -190,6 +257,8 @@ def __main__():
                     dry_run = True
                 else:
                     dry_run = False
+            elif cmd == "a":
+                action_key = v
             elif cmd == "b":
                 key_bucket = v
             elif cmd == "l":
@@ -209,6 +278,7 @@ def __main__():
         print("dry_run: True")
     else:
         print("dry_run: False")
+
     print("key_bucket: " + key_bucket)
     print("local_path: " + local_path)
     print("cdn_path: " + cdn_path)
@@ -228,10 +298,17 @@ def __main__():
 
     print("exclude_paths: " + json.dumps(exclude_paths))
 
-    sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run)
+    if action_key == "upload":
+        # upload sync folder
+        upload_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run)
 
-    if not dry_run:
-        refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
+        # refresh
+        if not dry_run:
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
+
+    elif action_key == "copy":
+        # copy files in buket
+        copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
 
     print("Done")
 
