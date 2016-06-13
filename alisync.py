@@ -336,13 +336,14 @@ def __main__():
     else:
         print("dry_run: False")
 
+    print("action: " + action_key)
     print("key_bucket: " + key_bucket)
     print("local_path: " + local_path)
     print("cdn_path: " + cdn_path)
     print("remote_path: " + remote_path)
 
     if len(key_bucket) == 0 or len(local_path) == 0 or len(cdn_path) == 0 or len(remote_path) == 0:
-        print("using alisync -dry [1 dry-run] -b [bucket-key] -l [local-folder-path] -c [cdn-path] -r [remote-key-path] -ex [exclude-path1] [exclude-path2] ... to sync")
+        print("using alisync -a [upload, copy, down] -dry [1 dry-run] -b [bucket-key] -l [local-folder-path] -c [cdn-path] -r [remote-key-path] -ex [exclude-path1] [exclude-path2] ... to sync")
         return
 
     while idx < argLen:
@@ -366,6 +367,10 @@ def __main__():
     elif action_key == "copy":
         # copy files in buket
         copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
+
+        # refresh
+        if not dry_run:
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
 
     elif action_key == "down":
         # download
