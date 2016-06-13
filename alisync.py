@@ -209,8 +209,10 @@ def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dr
                 print("will copy: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "")
             else:
                 print("copying: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "\n\t...")
+
                 bucket.delete_object(remote_key_path)
-                result = bucket.copy_object(key_bucket, local_path, remote_key_path)
+                result = bucket.copy_object(key_bucket, file_obj.key, remote_key_path)
+
                 print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
         else:
             print("file: " + remote_key_path + " matches md5: " + local_md5 + ", skip.")
