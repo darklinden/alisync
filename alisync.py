@@ -83,75 +83,90 @@ def file_md5(file_path):
     f.close()
     return oss2.utils.md5_string(content)
 
-def refresh_file(auth_key, auth_sec, cdn_path, remote_path):
-    Client = client.AcsClient(auth_key, auth_sec, 'cn-hangzhou')
+def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death):
+    try:
+        Client = client.AcsClient(auth_key, auth_sec, 'cn-hangzhou')
 
-    request = RefreshObjectCachesRequest.RefreshObjectCachesRequest()
-    request.set_accept_format('json')
+        request = RefreshObjectCachesRequest.RefreshObjectCachesRequest()
+        request.set_accept_format('json')
 
-    request.set_ObjectType("Directory")
+        request.set_ObjectType("Directory")
 
-    refresh_path = cdn_path.strip("/")
-    refresh_path += "/"
-    refresh_path += remote_path.strip("/")
-    refresh_path += "/"
-    request.set_ObjectPath(refresh_path)
+        refresh_path = cdn_path.strip("/")
+        refresh_path += "/"
+        refresh_path += remote_path.strip("/")
+        refresh_path += "/"
+        request.set_ObjectPath(refresh_path)
 
-    result = Client.do_action(request)
+        result = Client.do_action(request)
 
-    print(result)
+        print(result)
+    except:
+        if work_to_death:
+            print("Unexpected error:", sys.exc_info()[0])
+            refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death)
+        else:
+            raise
 
-def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run):
+def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run, work_to_death):
 
-    auth = oss2.Auth(auth_key, auth_sec)
-    bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+    try:
+        auth = oss2.Auth(auth_key, auth_sec)
+        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
 
-    if os.path.isdir(local_path):
-        for root, dirs, files in os.walk(local_path):
-            sub_files = os.listdir(root)
-            for fn in sub_files:
-                file_path = root + "/" + fn
-                if os.path.isfile(file_path):
-                    if not file_is_ok(file_path, exclude_paths=exclude_paths):
-                        # print('skip ' + file_path)
-                        continue
+        if os.path.isdir(local_path):
+            for root, dirs, files in os.walk(local_path):
+                sub_files = os.listdir(root)
+                for fn in sub_files:
+                    file_path = root + "/" + fn
+                    if os.path.isfile(file_path):
+                        if not file_is_ok(file_path, exclude_paths=exclude_paths):
+                            # print('skip ' + file_path)
+                            continue
 
-                    if len(root) > len(local_path):
-                        key_path = os.path.join(root[len(local_path):], fn)
-                    else:
-                        key_path = fn
-
-                    key_path = key_path.replace("\\", "/")
-
-                    if key_path[0] == "/":
-                        key_path = remote_path + key_path
-                    else:
-                        key_path = remote_path + "/" + key_path
-
-                    md5_str = file_md5(file_path)
-
-                    try:
-                        remote_result = bucket.head_object(key_path)
-                        remote_headers = remote_result.headers
-                        remote_md5 = remote_headers.get("ETag", "")
-                        remote_md5 = str(remote_md5)
-                        remote_md5 = remote_md5.strip()
-                        remote_md5 = remote_md5.strip("\"")
-                    except:
-                        remote_md5 = ""
-                        pass
-
-                    # print("file: " + key_path + " remote md5: " + remote_md5 + " md5: " + md5_str)
-
-                    if remote_md5.lower() != md5_str.lower():
-                        if dry_run:
-                            print("will upload: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "")
+                        if len(root) > len(local_path):
+                            key_path = os.path.join(root[len(local_path):], fn)
                         else:
-                            print("uploading: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "\n\t...")
-                            result = bucket.put_object_from_file(key_path, file_path, headers={'Content-MD5': file_md5_base64(file_path)})
-                            print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
-                    else:
-                        print("file: " + key_path + " matches md5: " + remote_md5 + ", skip.")
+                            key_path = fn
+
+                        key_path = key_path.replace("\\", "/")
+
+                        if key_path[0] == "/":
+                            key_path = remote_path + key_path
+                        else:
+                            key_path = remote_path + "/" + key_path
+
+                        md5_str = file_md5(file_path)
+
+                        try:
+                            remote_result = bucket.head_object(key_path)
+                            remote_headers = remote_result.headers
+                            remote_md5 = remote_headers.get("ETag", "")
+                            remote_md5 = str(remote_md5)
+                            remote_md5 = remote_md5.strip()
+                            remote_md5 = remote_md5.strip("\"")
+                        except:
+                            remote_md5 = ""
+                            pass
+
+                        # print("file: " + key_path + " remote md5: " + remote_md5 + " md5: " + md5_str)
+
+                        if remote_md5.lower() != md5_str.lower():
+                            if dry_run:
+                                print("will upload: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "")
+                            else:
+                                print("uploading: \n\tkey: " + key_path + "\n\tfile: " + file_path + "\n\tmd5: " + md5_str + "\n\t...")
+                                result = bucket.put_object_from_file(key_path, file_path, headers={'Content-MD5': file_md5_base64(file_path)})
+                                print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+                        else:
+                            print("file: " + key_path + " matches md5: " + remote_md5 + ", skip.")
+    except:
+        if work_to_death:
+            print("Unexpected error:", sys.exc_info()[0])
+            upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run,
+                               work_to_death)
+        else:
+            raise
 
 def oss_folder_content(bucket, remote_path):
     ret = []
@@ -169,53 +184,60 @@ def oss_folder_content(bucket, remote_path):
     return ret
 
 
-def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run):
+def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death):
 
-    auth = oss2.Auth(auth_key, auth_sec)
-    bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+    try:
+        auth = oss2.Auth(auth_key, auth_sec)
+        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
 
-    print("collecting files under: " + local_path + " ...")
-    remote_files = oss_folder_content(bucket, local_path)
+        print("collecting files under: " + local_path + " ...")
+        remote_files = oss_folder_content(bucket, local_path)
 
-    for file_obj in remote_files:
+        for file_obj in remote_files:
 
-        l = local_path
-        if not l.endswith("/"):
-            l += "/"
+            l = local_path
+            if not l.endswith("/"):
+                l += "/"
 
-        r = remote_path
-        if not r.endswith("/"):
-            r += "/"
+            r = remote_path
+            if not r.endswith("/"):
+                r += "/"
 
-        relative_path = file_obj.key[len(l):]
+            relative_path = file_obj.key[len(l):]
 
-        remote_key_path = r + relative_path
+            remote_key_path = r + relative_path
 
-        try:
-            remote_result = bucket.head_object(remote_key_path)
-            remote_headers = remote_result.headers
-            remote_md5 = remote_headers.get("ETag", "")
-            remote_md5 = str(remote_md5)
-            remote_md5 = remote_md5.strip()
-            remote_md5 = remote_md5.strip("\"")
-        except:
-            remote_md5 = ""
-            pass
+            try:
+                remote_result = bucket.head_object(remote_key_path)
+                remote_headers = remote_result.headers
+                remote_md5 = remote_headers.get("ETag", "")
+                remote_md5 = str(remote_md5)
+                remote_md5 = remote_md5.strip()
+                remote_md5 = remote_md5.strip("\"")
+            except:
+                remote_md5 = ""
+                pass
 
-        local_md5 = file_obj.etag
+            local_md5 = file_obj.etag
 
-        if len(local_md5) > 0 and remote_md5.lower() != local_md5.lower():
-            if dry_run:
-                print("will copy: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "")
+            if len(local_md5) > 0 and remote_md5.lower() != local_md5.lower():
+                if dry_run:
+                    print("will copy: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "")
+                else:
+                    print("copying: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "\n\t...")
+
+                    bucket.delete_object(remote_key_path)
+                    result = bucket.copy_object(key_bucket, file_obj.key, remote_key_path)
+
+                    print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
             else:
-                print("copying: \n\tkey: " + file_obj.key + "\n\tto: " + remote_key_path + "\n\tmd5: " + local_md5 + "\n\t...")
-
-                bucket.delete_object(remote_key_path)
-                result = bucket.copy_object(key_bucket, file_obj.key, remote_key_path)
-
-                print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+                print("file: " + remote_key_path + " matches md5: " + local_md5 + ", skip.")
+    except:
+        if work_to_death:
+            print("Unexpected error:", sys.exc_info()[0])
+            copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death)
         else:
-            print("file: " + remote_key_path + " matches md5: " + local_md5 + ", skip.")
+            raise
 
 def mkdir_p(path):
     # print("mkdir_p: " + path)
@@ -227,52 +249,59 @@ def mkdir_p(path):
         else:
             raise
 
-def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run):
+def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death):
 
-    auth = oss2.Auth(auth_key, auth_sec)
-    bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+    try:
+        auth = oss2.Auth(auth_key, auth_sec)
+        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
 
-    print("collecting files under: " + remote_path + " ...")
-    remote_files = oss_folder_content(bucket, remote_path)
+        print("collecting files under: " + remote_path + " ...")
+        remote_files = oss_folder_content(bucket, remote_path)
 
-    for file_obj in remote_files:
+        for file_obj in remote_files:
 
-        r = remote_path
-        if not r.endswith("/"):
-            r += "/"
+            r = remote_path
+            if not r.endswith("/"):
+                r += "/"
 
-        relative_path = file_obj.key[len(r):]
-        if len(relative_path) == 0:
-            continue
+            relative_path = file_obj.key[len(r):]
+            if len(relative_path) == 0:
+                continue
 
-        l = local_path
-        if not l.endswith("/"):
-            l += "/"
+            l = local_path
+            if not l.endswith("/"):
+                l += "/"
 
-        local_file_path = l + relative_path
+            local_file_path = l + relative_path
 
-        if os.path.isfile(local_file_path):
-            local_md5 = file_md5(local_file_path)
-        else:
-            local_md5 = ""
-
-        remote_md5 = file_obj.etag
-
-        if len(remote_md5) > 0 and remote_md5.lower() != local_md5.lower():
-            if dry_run:
-                print("will download: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "")
+            if os.path.isfile(local_file_path):
+                local_md5 = file_md5(local_file_path)
             else:
-                print("downloading: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "\n\t...")
-                folder, name = os.path.split(local_file_path)
-                mkdir_p(folder)
-                if os.path.isfile(local_file_path):
-                    os.remove(local_file_path)
-                if os.path.isdir(local_file_path):
-                    shutil.rmtree(local_file_path)
-                result = bucket.get_object_to_file(file_obj.key, local_file_path)
-                print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+                local_md5 = ""
+
+            remote_md5 = file_obj.etag
+
+            if len(remote_md5) > 0 and remote_md5.lower() != local_md5.lower():
+                if dry_run:
+                    print("will download: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "")
+                else:
+                    print("downloading: \n\tkey: " + file_obj.key + "\n\tto: " + local_file_path + "\n\tmd5: " + remote_md5 + "\n\t...")
+                    folder, name = os.path.split(local_file_path)
+                    mkdir_p(folder)
+                    if os.path.isfile(local_file_path):
+                        os.remove(local_file_path)
+                    if os.path.isdir(local_file_path):
+                        shutil.rmtree(local_file_path)
+                    result = bucket.get_object_to_file(file_obj.key, local_file_path)
+                    print("\tresult: " + str(result.status) + "\n\tresponse: " + str(result.headers) + "\n")
+            else:
+                print("file: " + local_file_path + " matches md5: " + remote_md5 + ", skip.")
+    except:
+        if work_to_death:
+            print("Unexpected error:", sys.exc_info()[0])
+            download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death)
         else:
-            print("file: " + local_file_path + " matches md5: " + remote_md5 + ", skip.")
+            raise
 
 def __main__():
 
@@ -291,6 +320,7 @@ def __main__():
     cdn_path = ""
     auth_key = ""
     auth_sec = ""
+    work_to_death = False
 
     exclude_paths = []
 
@@ -316,6 +346,11 @@ def __main__():
                     dry_run = True
                 else:
                     dry_run = False
+            if cmd == "w2d":
+                if v == "1":
+                    work_to_death = True
+                else:
+                    work_to_death = False
             elif cmd == "a":
                 action_key = v
             elif cmd == "b":
@@ -360,23 +395,24 @@ def __main__():
 
     if action_key == "upload":
         # upload sync folder
-        upload_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run)
+
+        upload_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run, work_to_death=work_to_death)
 
         # refresh
         if not dry_run:
-            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death)
 
     elif action_key == "copy":
         # copy files in buket
-        copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
+        copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death)
 
         # refresh
         if not dry_run:
-            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path)
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death)
 
     elif action_key == "down":
         # download
-        download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run)
+        download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death)
 
     print("Done")
 
