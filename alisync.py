@@ -83,9 +83,9 @@ def file_md5(file_path):
     f.close()
     return oss2.utils.md5_string(content)
 
-def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death):
+def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death, end_point):
     try:
-        Client = client.AcsClient(auth_key, auth_sec, 'cn-hangzhou')
+        Client = client.AcsClient(auth_key, auth_sec, end_point)
 
         request = RefreshObjectCachesRequest.RefreshObjectCachesRequest()
         request.set_accept_format('json')
@@ -108,11 +108,11 @@ def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death):
         else:
             raise
 
-def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run, work_to_death):
+def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, exclude_paths, dry_run, work_to_death, end_point):
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
 
         if os.path.isdir(local_path):
             for root, dirs, files in os.walk(local_path):
@@ -184,11 +184,11 @@ def oss_folder_content(bucket, remote_path):
     return ret
 
 
-def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death):
+def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death, end_point):
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
 
         print("collecting files under: " + local_path + " ...")
         remote_files = oss_folder_content(bucket, local_path)
@@ -249,11 +249,11 @@ def mkdir_p(path):
         else:
             raise
 
-def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death):
+def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dry_run, work_to_death, end_point):
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
 
         print("collecting files under: " + remote_path + " ...")
         remote_files = oss_folder_content(bucket, remote_path)
@@ -321,6 +321,7 @@ def __main__():
     auth_key = ""
     auth_sec = ""
     work_to_death = False
+    end_point = "cn-hangzhou"
 
     exclude_paths = []
 
@@ -361,6 +362,8 @@ def __main__():
                 cdn_path = v
             elif cmd == "r":
                 remote_path = v
+            elif cmd == "p":
+                end_point = v
             elif cmd == "ex":
                 idx += 1
                 break
@@ -380,7 +383,7 @@ def __main__():
     print("remote_path: " + remote_path)
 
     if len(key_bucket) == 0 or len(local_path) == 0 or len(cdn_path) == 0 or len(remote_path) == 0:
-        print("using alisync -a [upload, copy, down] -dry [1 dry-run] -b [bucket-key] -l [local-folder-path] -c [cdn-path] -r [remote-key-path] -ex [exclude-path1] [exclude-path2] ... to sync")
+        print("using alisync \n\t-a [upload, copy, down] \n\t-dry [1 dry-run] \n\t-p [end-point default:cn-hangzhou] \n\t-b [bucket-key] \n\t-l [local-folder-path] \n\t-c [cdn-path] \n\t-r [remote-key-path] \n\t-ex [exclude-path1] [exclude-path2] ... \n\tto sync with aliyun")
         return
 
     while idx < argLen:
@@ -396,23 +399,23 @@ def __main__():
     if action_key == "upload":
         # upload sync folder
 
-        upload_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run, work_to_death=work_to_death)
+        upload_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, exclude_paths=exclude_paths, dry_run=dry_run, work_to_death=work_to_death, end_point=end_point)
 
         # refresh
         if not dry_run:
-            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death)
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death, end_point=end_point)
 
     elif action_key == "copy":
         # copy files in buket
-        copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death)
+        copy_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death, end_point=end_point)
 
         # refresh
         if not dry_run:
-            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death)
+            refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path, work_to_death=work_to_death, end_point=end_point)
 
     elif action_key == "down":
         # download
-        download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death)
+        download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death, end_point=end_point)
 
     print("Done")
 
