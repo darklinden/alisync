@@ -85,7 +85,10 @@ def file_md5(file_path):
 
 def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death, end_point):
     try:
-        Client = client.AcsClient(auth_key, auth_sec, end_point)
+        if end_point == "":
+            Client = client.AcsClient(auth_key, auth_sec, "cn-hangzhou")
+        else:
+            Client = client.AcsClient(auth_key, auth_sec, end_point)
 
         request = RefreshObjectCachesRequest.RefreshObjectCachesRequest()
         request.set_accept_format('json')
@@ -112,7 +115,10 @@ def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, 
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
+        if str(end_point) == "":
+            bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        else:
+            bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
 
         if os.path.isdir(local_path):
             for root, dirs, files in os.walk(local_path):
@@ -188,8 +194,11 @@ def copy_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, dr
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
-
+        if str(end_point) == "":
+            bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        else:
+            bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
+            
         print("collecting files under: " + local_path + " ...")
         remote_files = oss_folder_content(bucket, local_path)
 
@@ -253,8 +262,11 @@ def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path
 
     try:
         auth = oss2.Auth(auth_key, auth_sec)
-        bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
-
+        if str(end_point) == "":
+            bucket = oss2.Bucket(auth, 'oss.aliyuncs.com', key_bucket)
+        else:
+            bucket = oss2.Bucket(auth, 'oss-' + str(end_point) + '.aliyuncs.com', key_bucket)
+            
         print("collecting files under: " + remote_path + " ...")
         remote_files = oss_folder_content(bucket, remote_path)
 
@@ -321,7 +333,7 @@ def __main__():
     auth_key = ""
     auth_sec = ""
     work_to_death = False
-    end_point = "cn-hangzhou"
+    end_point = ""
 
     exclude_paths = []
 
