@@ -121,7 +121,7 @@ def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death, end_p
         refresh_path += "/"
         request.set_ObjectPath(refresh_path)
 
-        result = Client.do_action(request)
+        result = Client.do_action_with_exception(request)
 
         print(result)
     except:
