@@ -13,11 +13,31 @@ from aliyunsdkcore import client
 from aliyunsdkcdn.request.v20141111 import RefreshObjectCachesRequest
 
 def run_cmd(cmd):
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    out, err = p.communicate()
-    if err:
-        print(err)
-    return out
+    print("run cmd: " + " ".join(cmd))
+    print("")
+    print("")
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+    output = ""
+    # Poll process for new output until finished
+    while True:
+        nextline = process.stdout.readline()
+        if nextline == '' and process.poll() is not None:
+            break
+
+        sys.stdout.write(nextline)
+        sys.stdout.flush()
+        output = output + nextline
+
+    xoutput, err = process.communicate()
+    exitCode = process.returncode
+
+    if (exitCode != 0):
+        if err is not None:
+            print(err)
+
+    print("")
+    return output
 
 def self_install(file, des):
     file_path = os.path.realpath(file)
@@ -428,6 +448,10 @@ def __main__():
     elif action_key == "down":
         # download
         download_sync_folder(auth_key=auth_key, auth_sec=auth_sec, key_bucket=key_bucket, local_path=local_path, remote_path=remote_path, dry_run=dry_run, work_to_death=work_to_death, end_point=end_point)
+
+    elif action_key == "refresh":
+        refresh_file(auth_key=auth_key, auth_sec=auth_sec, cdn_path=cdn_path, remote_path=remote_path,
+                     work_to_death=work_to_death, end_point=end_point)
 
     print("Done")
 
