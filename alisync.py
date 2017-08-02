@@ -106,9 +106,9 @@ def file_md5(file_path):
 def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death, end_point):
     try:
         if end_point == "":
-            Client = client.AcsClient(auth_key, auth_sec, "cn-hangzhou")
-        else:
-            Client = client.AcsClient(auth_key, auth_sec, end_point)
+            end_point = "cn-hangzhou"
+
+        cdn_client = client.AcsClient(str(auth_key).strip(), str(auth_sec).strip(), str(end_point))
 
         request = RefreshObjectCachesRequest.RefreshObjectCachesRequest()
         request.set_accept_format('json')
@@ -116,14 +116,17 @@ def refresh_file(auth_key, auth_sec, cdn_path, remote_path, work_to_death, end_p
         request.set_ObjectType("Directory")
 
         refresh_path = cdn_path.strip("/")
+
         refresh_path += "/"
-        refresh_path += remote_path.strip("/")
-        refresh_path += "/"
+        if len(remote_path) > 0:
+            refresh_path += remote_path.strip("/")
+            refresh_path += "/"
         request.set_ObjectPath(refresh_path)
 
-        result = Client.do_action_with_exception(request)
+        result = cdn_client.do_action_with_exception(request)
 
         print(result)
+
     except:
         if work_to_death:
             print("Unexpected error:", sys.exc_info()[0])
@@ -160,7 +163,8 @@ def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, 
                         if key_path[0] == "/":
                             key_path = remote_path + key_path
                         else:
-                            key_path = remote_path + "/" + key_path
+                            if len(remote_path) > 0:
+                                key_path = remote_path + "/" + key_path
 
                         md5_str = file_md5(file_path)
 
