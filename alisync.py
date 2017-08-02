@@ -196,8 +196,8 @@ def upload_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path, 
 
 def oss_folder_content(bucket, remote_path):
     ret = []
-    p = remote_path
-    if not remote_path.endswith("/"):
+    p = str(remote_path)
+    if len(p) > 0 and not remote_path.endswith("/"):
         p += "/"
     for obj in oss2.ObjectIterator(bucket,delimiter='/', prefix=p):
         if obj.is_prefix():  # 文件夹
@@ -293,7 +293,7 @@ def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path
         for file_obj in remote_files:
 
             r = remote_path
-            if not r.endswith("/"):
+            if len(r) > 0 and not r.endswith("/"):
                 r += "/"
 
             relative_path = file_obj.key[len(r):]
@@ -335,7 +335,7 @@ def download_sync_folder(auth_key, auth_sec, key_bucket, local_path, remote_path
         else:
             raise
 
-def __main__():
+def main():
 
     # self_install
     if len(sys.argv) > 1 and sys.argv[1] == 'install':
@@ -455,4 +455,5 @@ def __main__():
 
     print("Done")
 
-__main__()
+if __name__ == "__main__":
+    main()
