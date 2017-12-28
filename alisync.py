@@ -256,7 +256,8 @@ def oss_folder_content(bucket, remote_path):
             ret.extend(oss_folder_content(bucket, obj.key))
         else:  # 文件
             # print('file: ' + obj.key)
-            ret.append(obj)
+            if obj.key != remote_path:
+                ret.append(obj)
 
     return ret
 
